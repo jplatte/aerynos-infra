@@ -1,6 +1,5 @@
 use service::database::{self, Transaction};
 use sqlx::FromRow;
-use thiserror::Error;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct Record {
@@ -23,11 +22,11 @@ impl Record {
     }
 }
 
-pub async fn lookup<'a, T>(conn: &'a mut T, name: &str) -> Result<Option<Record>, Error>
+pub async fn lookup<'a, T>(conn: &'a mut T, name: &str) -> sqlx::Result<Option<Record>>
 where
     &'a mut T: database::Executor<'a>,
 {
-    Ok(sqlx::query_as(
+    sqlx::query_as(
         "
         SELECT
           name,
@@ -43,14 +42,14 @@ where
     )
     .bind(name)
     .fetch_optional(conn)
-    .await?)
+    .await
 }
 
-pub async fn list<'a, T>(conn: &'a mut T) -> Result<Vec<Record>, Error>
+pub async fn list<'a, T>(conn: &'a mut T) -> sqlx::Result<Vec<Record>>
 where
     &'a mut T: database::Executor<'a>,
 {
-    Ok(sqlx::query_as(
+    sqlx::query_as(
         "
         SELECT
           name,
@@ -63,10 +62,10 @@ where
         ",
     )
     .fetch_all(conn)
-    .await?)
+    .await
 }
 
-pub async fn record(tx: &mut Transaction, record: Record) -> Result<(), Error> {
+pub async fn record(tx: &mut Transaction, record: Record) -> sqlx::Result<()> {
     sqlx::query(
         "
         INSERT INTO collection
@@ -78,7 +77,7 @@ pub async fn record(tx: &mut Transaction, record: Record) -> Result<(), Error> {
           source_release
         )
         VALUES (?,?,?,?,?)
-        ON CONFLICT(name) DO UPDATE SET 
+        ON CONFLICT(name) DO UPDATE SET
           source_id=excluded.source_id,
           package_id=excluded.package_id,
           build_release=excluded.build_release,
@@ -94,12 +93,4 @@ pub async fn record(tx: &mut Transaction, record: Record) -> Result<(), Error> {
     .await?;
 
     Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("sqlx")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("sqlx migration")]
-    Migrate(#[from] sqlx::migrate::MigrateError),
 }
